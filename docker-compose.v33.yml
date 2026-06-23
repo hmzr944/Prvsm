@@ -1,0 +1,43 @@
+services:
+
+  # ── Bot PRISM v33 (boucle toutes les heures à HH:03) ─────────────────────────
+  prism-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.v33
+    container_name: prism-bot
+    command: python live_monitor_v33.py
+    environment:
+      - PRISM_DATA_DIR=/data
+      - TZ=Europe/Paris
+    volumes:
+      - .:/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Dashboard web (http://localhost:5001) ─────────────────────────────────────
+  prism-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.v33
+    container_name: prism-dashboard
+    command: python dashboard_server.py --port 5001
+    environment:
+      - PRISM_DATA_DIR=/data
+      - TZ=Europe/Paris
+    volumes:
+      - .:/data
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+    depends_on:
+      - prism-bot
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
