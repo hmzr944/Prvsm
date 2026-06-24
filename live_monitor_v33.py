@@ -234,7 +234,7 @@ def fetch_live(inst_id: str, limit: int = 350) -> pd.DataFrame | None:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df["timestamp"] = pd.to_datetime(
         df["timestamp"].astype(int), unit="ms", utc=True
-    ).dt.tz_localize(None)
+    ).dt.tz_convert(None)
     df = df.set_index("timestamp").sort_index()
     df = df[~df.index.duplicated(keep="first")].dropna(subset=["close"])
     return df
@@ -697,7 +697,7 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
         cooldown_tracker[c["ck"]] = c["bar"]
         total_margin += margin_per_trade
         signals_new.append(c)
-        log.info(f"SIGNAL {c['sym']:12s} {side:5s} | score={c['score']} "
+        log.info(f"SIGNAL-C {c['sym']:12s} {side:5s} | score={c['score']} "
                  f"adx={c['adx']:.1f} lev=×{c['leverage']} | "
                  f"entry prévu à la prochaine bougie")
         if _tg:
@@ -739,7 +739,7 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
         score = int(sd["buy_sc"][bar]) if action == "BUY" else int(sd["sell_sc"][bar])
         if score < SCORE_MIN_D:
             continue
-        lev = HIGH_LEVERAGE_D if (adx_val > 28 and score >= 68) else BASE_LEVERAGE_D
+        lev = HIGH_LEVERAGE_D if (adx_val > 28 and score >= SCORE_MIN_D) else BASE_LEVERAGE_D
         candidates_d.append({"sym": sym, "ck": ck, "bar": bar,
                               "action": action, "score": score,
                               "adx": adx_val, "leverage": lev, "pattern": "D"})
