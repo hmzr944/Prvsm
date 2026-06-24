@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile.v33
     container_name: prism-bot
-    command: python live_monitor_v33.py
+    command: python /data/live_monitor_v33.py
     environment:
       - PRISM_DATA_DIR=/data
       - TZ=Europe/Paris
@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: Dockerfile.v33
     container_name: prism-dashboard
-    command: python dashboard_server.py --port 5001
+    command: python /data/dashboard_server.py --port 5001
     environment:
       - PRISM_DATA_DIR=/data
       - TZ=Europe/Paris
