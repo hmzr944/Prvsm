@@ -68,8 +68,8 @@ RISK_PCT         = 0.10
 MAX_POS          = 4
 SCORE_MIN        = 65
 
-SCORE_MIN_D     = 68   # relevé 60→68 (backtest : trop de faux signaux à 60)
-ADX_MIN_D       = 22
+SCORE_MIN_D     = 76   # relevé 68→76 (grid search : +123% vs -24% à 68)
+ADX_MIN_D       = 25   # relevé 22→25 (filtre tendances faibles)
 RISK_PCT_D      = 0.06
 BASE_LEVERAGE_D = 8
 HIGH_LEVERAGE_D = 10
@@ -323,7 +323,8 @@ def check_pattern_d(sd: dict, bar: int, adx_val: float):
 # ── Moteur backtest ──────────────────────────────────────────────────────────
 def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
                  activation_atr: float = 0.0, trail_distance_atr: float = 0.0,
-                 time_stop_c: int = 0):
+                 time_stop_c: int = 0,
+                 score_min_d: int = SCORE_MIN_D, adx_min_d: float = ADX_MIN_D):
     """
     activation_atr      : ATR multiplier — active le trailing quand profit ≥ n×ATR
                           0 = désactivé (comportement classique TP fixe)
@@ -543,7 +544,7 @@ def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
                 continue
             dk = sym + "D"
             bar_cd = cooldown_tracker.get(dk, -9999)
-            if bar - bar_cd >= COOLDOWN_BARS and adx_val >= ADX_MIN_D:
+            if bar - bar_cd >= COOLDOWN_BARS and adx_val >= adx_min_d:
                 action = check_pattern_d(sd, bar, adx_val)
                 if action is not None:
                     if btc_4h_bull is not None:
@@ -551,7 +552,7 @@ def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
                         if action == "SELL" and btc_4h_bull:     action = None
                 if action is not None:
                     score = int(sd["buy_sc"][bar]) if action == "BUY" else int(sd["sell_sc"][bar])
-                    if score >= SCORE_MIN_D and total_margin_used + margin_d <= max_margin:
+                    if score >= score_min_d and total_margin_used + margin_d <= max_margin:
                         lev = HIGH_LEVERAGE_D if adx_val > 28 and score >= 68 else BASE_LEVERAGE_D
                         side = "long" if action == "BUY" else "short"
                         open_px = float(sd["open"][bar])
@@ -858,16 +859,79 @@ def main():
         if st["pf"] > best_pf:
             best_pf, best_cfg = st["pf"], label
 
-    print(f"\n  Meilleure config : {best_cfg}  (PF={best_pf:.2f})")
+    print(f"\n  Meilleure config trailing : {best_cfg}  (PF={best_pf:.2f})")
 
-    # ── Rapport détaillé de la meilleure config ───────────────────────────────
-    best_act, best_trl, best_st = max(results, key=lambda x: x[2]["pf"])
+    # ── Grid Search Qualité Entrée (Score × ADX) ─────────────────────────────
+    entry_grid = [
+        (68, 22), (68, 25), (68, 28),
+        (70, 22), (70, 25), (70, 28),
+        (72, 22), (72, 25), (72, 28),
+        (74, 22), (74, 25), (74, 28),
+        (76, 22), (76, 25), (76, 28),
+    ]
+
     print(f"\n{'='*70}")
-    print(f"  RAPPORT DÉTAILLÉ — act={best_act} trl={best_trl}")
+    print(f"  GRID SEARCH — QUALITE ENTREE PATTERN D  (score x ADX)")
+    print(f"  Objectif : WR Pattern D > 35%  |  Baseline D : 24% WR, +26 EUR")
+    print(f"{'='*70}")
+
+    def _stats_d(trades):
+        td = [t for t in trades if t.get("pattern") == "D"]
+        n  = len(td)
+        if n == 0:
+            return dict(n=0, wr=0, pf=0, pnl=0)
+        wins  = [t for t in td if t["pnl"] > 0]
+        losses= [t for t in td if t["pnl"] <= 0]
+        wr    = len(wins) / n * 100
+        avg_w = sum(t["pnl"] for t in wins)  / max(len(wins), 1)
+        avg_l = sum(t["pnl"] for t in losses) / max(len(losses), 1)
+        pf    = abs(avg_w / avg_l) if avg_l != 0 else 999
+        return dict(n=n, wr=wr, pf=pf, pnl=sum(t["pnl"] for t in td))
+
+    def _stats_total(trades, eq_curve, final_eq):
+        n    = len(trades)
+        wins = [t for t in trades if t["pnl"] > 0]
+        wr   = len(wins) / n * 100 if n else 0
+        pnl  = sum(t["pnl"] for t in trades)
+        peak = INITIAL_CAPITAL; maxdd = 0.0
+        for e in eq_curve:
+            peak  = max(peak, e["equity"])
+            maxdd = max(maxdd, (peak - e["equity"]) / peak * 100)
+        return dict(n=n, wr=wr, pnl=pnl, final=final_eq, maxdd=maxdd)
+
+    hdr2 = (f"  {'Sc':>3} {'ADX':>4} {'D trades':>8} {'D WR%':>6} {'D PF':>5} "
+            f"{'D PnL':>7} {'Tot trades':>10} {'Tot PnL':>8} {'Final':>8} {'MaxDD%':>7}")
+    print(hdr2)
+    print(f"  {'-'*78}")
+
+    best_entry_pf, best_entry_cfg = 0.0, ""
+    entry_results = []
+
+    for sc, adx in entry_grid:
+        t_, c_, e_ = run_backtest(sym_data, start_ts, end_ts, score_min_d=sc, adx_min_d=adx)
+        sd_  = _stats_d(t_)
+        st_  = _stats_total(t_, c_, e_)
+        entry_results.append((sc, adx, sd_, st_))
+        marker = " <-- BEST D PF" if sd_["pf"] > best_entry_pf and sd_["n"] >= 20 else ""
+        print(f"  {sc:>3}  {adx:>4}  {sd_['n']:>8}  {sd_['wr']:>6.1f}  {sd_['pf']:>5.2f} "
+              f"  {sd_['pnl']:>+7.0f}  {st_['n']:>10}  {st_['pnl']:>+8.0f}  "
+              f"{st_['final']:>8.0f}  {st_['maxdd']:>7.1f}%{marker}")
+        if sd_["pf"] > best_entry_pf and sd_["n"] >= 20:
+            best_entry_pf  = sd_["pf"]
+            best_entry_cfg = f"score={sc} adx={adx}"
+
+    print(f"\n  Meilleure config entree : {best_entry_cfg}  (D PF={best_entry_pf:.2f})")
+
+    # ── Rapport détaillé de la meilleure config entrée ────────────────────────
+    best_sc, best_adx, _, _ = max(
+        [r for r in entry_results if r[2]["n"] >= 20],
+        key=lambda x: x[2]["pf"]
+    )
+    print(f"\n{'='*70}")
+    print(f"  RAPPORT DÉTAILLÉ — score_min_d={best_sc}  adx_min_d={best_adx}")
     print(f"{'='*70}")
     t_best, c_best, e_best = run_backtest(sym_data, start_ts, end_ts,
-                                          activation_atr=best_act,
-                                          trail_distance_atr=best_trl)
+                                          score_min_d=best_sc, adx_min_d=best_adx)
     print_report(t_best, c_best, e_best, args.months, start_ts, end_ts)
 
 if __name__ == "__main__":

@@ -108,8 +108,8 @@ MAX_POS          = 4
 SCORE_MIN        = 65
 
 # ── Pattern D — EMA Trend Follow ─────────────────────────────────────────────
-SCORE_MIN_D      = 68   # relevé 60→68 (backtest 4 mois : trop de faux signaux)
-ADX_MIN_D        = 22
+SCORE_MIN_D      = 76   # relevé 68→76 (grid search score×ADX : +123% vs -24%)
+ADX_MIN_D        = 25   # relevé 22→25 (filtre tendances faibles)
 VOL_RATIO_D      = 1.2
 RISK_PCT_D       = 0.06   # 6% de l'equity (vs 10% Pattern C)
 BASE_LEVERAGE_D  = 8
