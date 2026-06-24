@@ -74,6 +74,13 @@ RISK_PCT_D      = 0.06
 BASE_LEVERAGE_D = 8
 HIGH_LEVERAGE_D = 10
 
+# Univers autorisé Pattern D — actifs "trending" (WR≥27% ET PnL>0 sur 4 mois)
+# Les actifs mean-reverting (ATOM, ARB, LTC, SEI…) génèrent des faux signaux.
+PATTERN_D_WHITELIST = {
+    "AVAX-USDT", "TIA-USDT", "OP-USDT", "JUP-USDT",
+    "ICP-USDT",  "SUI-USDT", "DOT-USDT", "TRX-USDT",
+}
+
 # ── Téléchargement données ───────────────────────────────────────────────────
 def fetch_symbol(sym: str, months: int = 6) -> pd.DataFrame | None:
     bars_needed = months * 30 * 24 + 400   # warmup indicateurs
@@ -531,6 +538,8 @@ def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
 
             # ── Pattern D ──────────────────────────────────────────────────
             if sym in syms_in_pos:
+                continue
+            if sym not in PATTERN_D_WHITELIST:
                 continue
             dk = sym + "D"
             bar_cd = cooldown_tracker.get(dk, -9999)

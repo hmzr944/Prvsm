@@ -115,6 +115,13 @@ RISK_PCT_D       = 0.06   # 6% de l'equity (vs 10% Pattern C)
 BASE_LEVERAGE_D  = 8
 HIGH_LEVERAGE_D  = 10
 
+# Univers autorisé Pattern D — actifs trending uniquement (WR>27%, PnL>0 sur 4 mois)
+# Les actifs mean-reverting (ATOM, ARB, LTC, SEI, LINK…) génèrent des faux signaux.
+PATTERN_D_WHITELIST = {
+    "AVAX-USDT", "TIA-USDT", "OP-USDT", "JUP-USDT",
+    "ICP-USDT",  "SUI-USDT", "DOT-USDT", "TRX-USDT",
+}
+
 OKX_URL = "https://www.okx.com/api/v5/market/history-candles"
 
 # ── State (persistance JSON) ─────────────────────────────────────────────────
@@ -682,6 +689,8 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
     candidates_d = []
     for sym, sd in sym_data.items():
         if sym == "BTC-USDT":
+            continue
+        if sym not in PATTERN_D_WHITELIST:
             continue
         if sym in syms_with_pos:
             continue
