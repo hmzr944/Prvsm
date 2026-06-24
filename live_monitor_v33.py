@@ -483,6 +483,15 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
             pending_entries[pk] = p
             continue
 
+        # Revalidation : si les paramètres ont changé depuis la détection, annuler
+        if p.get("pattern") == "D":
+            if p["sym"] not in PATTERN_D_WHITELIST:
+                log.warning(f"ANNULÉ {p['sym']} (hors whitelist Pattern D — paramètres mis à jour)")
+                continue
+            if p.get("score", 0) < SCORE_MIN_D:
+                log.warning(f"ANNULÉ {p['sym']} (score={p.get('score')} < SCORE_MIN_D={SCORE_MIN_D})")
+                continue
+
         open_px     = float(sd["open"][bar])
         side        = p["side"]
         entry_price = (open_px * (1 + SLIPPAGE) if side == "long"
@@ -543,6 +552,19 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
         elapsed_h = (current_bar_ts - entry_ts).total_seconds() / 3600
         if exit_price is None and elapsed_h >= TIME_STOP_H:
             exit_price, exit_reason = cl, "time_stop"
+
+        # Clôture forcée si la position ne respecte plus les règles actuelles
+        # (ex: paramètres changés depuis l'entrée — trade hors whitelist ou score périmé)
+        if exit_price is None and pos.get("pattern") == "D":
+            invalid = False
+            if pos["sym"] not in PATTERN_D_WHITELIST:
+                invalid = True
+                log.warning(f"FORCE-CLOSE {pos['sym']} hors whitelist Pattern D (params mis à jour)")
+            elif pos.get("score", 99) < SCORE_MIN_D:
+                invalid = True
+                log.warning(f"FORCE-CLOSE {pos['sym']} score={pos.get('score')} < {SCORE_MIN_D} (params mis à jour)")
+            if invalid:
+                exit_price, exit_reason = cl, "param_update"
 
         if exit_price is not None:
             exit_price = (exit_price * (1 - EXIT_SLIPPAGE) if side == "long"
