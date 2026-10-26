@@ -22,3 +22,6 @@ venv/
 .agents/
 skills-lock.json
 *.log
+
+# Secrets (clé API Anthropic pour docker compose)
+.env

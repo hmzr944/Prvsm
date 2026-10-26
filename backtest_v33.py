@@ -514,7 +514,11 @@ def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
                         if score >= SCORE_MIN and total_margin_used + margin_c <= max_margin:
                             lev = HIGH_LEVERAGE if adx_val > 28 and score >= 72 else BASE_LEVERAGE
                             side = "long" if action == "BUY" else "short"
-                            open_px = float(sd["open"][bar])
+                            # Entrée à l'ouverture de la barre suivante (comme le live) :
+                            # le signal utilise la clôture de `bar`, son open est déjà passé.
+                            if bar + 1 >= len(sd["open"]):
+                                continue
+                            open_px = float(sd["open"][bar + 1])
                             ep  = open_px * (1 + SLIPPAGE) if side == "long" else open_px * (1 - SLIPPAGE)
                             atr = float(sd["atr14"][bar])
                             if math.isnan(atr) or atr <= 0:
@@ -555,7 +559,9 @@ def run_backtest(sym_data: dict, start_ts: pd.Timestamp, end_ts: pd.Timestamp,
                     if score >= score_min_d and total_margin_used + margin_d <= max_margin:
                         lev = HIGH_LEVERAGE_D if adx_val > 28 and score >= 68 else BASE_LEVERAGE_D
                         side = "long" if action == "BUY" else "short"
-                        open_px = float(sd["open"][bar])
+                        if bar + 1 >= len(sd["open"]):
+                            continue
+                        open_px = float(sd["open"][bar + 1])
                         ep  = open_px * (1 + SLIPPAGE) if side == "long" else open_px * (1 - SLIPPAGE)
                         atr = float(sd["atr14"][bar])
                         if math.isnan(atr) or atr <= 0:

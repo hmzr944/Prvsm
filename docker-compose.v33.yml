@@ -10,6 +10,9 @@ services:
     environment:
       - PRISM_DATA_DIR=/data
       - TZ=Europe/Paris
+      # Veto IA Claude : mettre PRISM_AI_VETO=1 et ANTHROPIC_API_KEY dans un fichier .env
+      - PRISM_AI_VETO=${PRISM_AI_VETO:-0}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - .:/data
     restart: unless-stopped

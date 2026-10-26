@@ -13,6 +13,7 @@ COPY live_monitor_v33.py \
      dashboard_server.py \
      dashboard.html \
      telegram_notif.py \
+     ai_veto.py \
      ./
 
 ENV PYTHONUNBUFFERED=1

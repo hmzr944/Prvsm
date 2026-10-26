@@ -5,3 +5,4 @@ scipy>=1.11.0
 rich>=13.7.0
 flask>=3.0.0
 flask-cors>=4.0.0
+anthropic>=2.3.0

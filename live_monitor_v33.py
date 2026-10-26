@@ -36,6 +36,8 @@ try:
 except ImportError:
     _tg = None
 
+import ai_veto
+
 console = Console()
 
 # ── Répertoire de travail ────────────────────────────────────────────────────
@@ -494,6 +496,16 @@ def engine_step(state: dict, sym_data: dict, current_bar_ts: pd.Timestamp):
 
         open_px     = float(sd["open"][bar])
         side        = p["side"]
+
+        # Veto IA (opt-in, PRISM_AI_VETO=1) : peut bloquer l'entrée, jamais la forcer
+        if ai_veto.enabled():
+            market = {"variation_24h": f"{open_px / float(sd['close'][max(bar - 24, 0)]) - 1:+.2%}",
+                      "adx": round(float(sd["adx"][max(bar - 1, 0)]), 1)}
+            blocked, reason = ai_veto.should_block(p["sym"], side, p.get("pattern", "C"),
+                                                   p["score"], p["leverage"], market, open_px)
+            if blocked:
+                log.warning(f"BLOQUÉ {p['sym']} {side} par le veto IA : {reason}")
+                continue
         entry_price = (open_px * (1 + SLIPPAGE) if side == "long"
                        else open_px * (1 - SLIPPAGE))
         atr_now = float(sd["atr14"][bar])
